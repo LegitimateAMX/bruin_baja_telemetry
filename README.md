@@ -80,46 +80,173 @@ This file is a demo of how firmware might collect sensor values, create packets,
     - One float packet (2 values).
   - Shows the normal workflow: `packet_init` → `packet_add_*` → `packet_serialize` → `transmit_packet`.
 
-## File: `pc_depacketizer.py`
 
-### Classes / Exceptions
+# File: `pc_depacketizer.py`
 
-- `class DataType(IntEnum)`
-  - Mirrors the MCU `DataType` codes so Python can interpret the header type byte.
+# `DataDepacketizer` Class
 
-- `class DepacketizationError(Exception)`
-  - Raised when a packet is malformed (unknown type code, wrong length, etc.).
+A class to read, parse (depacketize), and store data packets from CSV files. Each packet is expected to be in the format:
 
-- `class SensorPacket`
-  - Container for a decoded packet:
-    - `slave_address`, `data_type`, `variable_count`, and `variables` list.
-  - `__repr__` provides a concise developer-friendly string.
-  - `__str__` provides a human-readable multi-line view.
+```
+[ address(1 byte) | type_code(1 byte) | num_vars(1 byte) | payload... ]
+```
 
-### Functions
+* Supports reading multiple CSV files from a directory or a single CSV file.
+* Supports direct parsing of bytes. 
+* Can write parsed data to a CSV file (will create parent directories if needed).
+* Stores all parsed packets internally in a list.
+* Can output stored data as a list. 
+* Data is stored in the format: address, value1, value2, ...
+* Stores source path. 
+* Stores CSV to write to path. 
 
-- `get_type_size(data_type: DataType) -> int`
-  - Returns the payload element size for the given `DataType`.
-  - Raises `DepacketizationError` for unsupported/unknown codes.
+---
 
-- `depacketize(packet_bytes: Union[bytes, bytearray, str]) -> SensorPacket`
-  - Core parser that:
-    1. Accepts either raw bytes or a hex string.
-    2. Validates minimum size (3-byte header).
-    3. Reads header fields (`slave_address`, `type_code`, `variable_count`).
-    4. Validates payload length equals `variable_count * sizeof(type)`.
-    5. Unpacks values into Python types:
-       - int values as integers
-       - floats via `struct.unpack('<f', ...)`
-       - doubles via `struct.unpack('<d', ...)`
-  - Returns a `SensorPacket` object or raises `DepacketizationError`.
+## Class Methods
 
-- `depacketize_batch(packets_data: List[Union[bytes, str]]) -> List[SensorPacket]`
-  - Convenience helper that applies `depacketize` to a list of packets.
+### `__init__(self, source_path=None, csv_file=None)`
 
-### Script usage (`if __name__ == "__main__":`)
-- Shows example depacketization from a hex string and from raw bytes.
-- Demonstrates expected error handling for malformed packets.
+Initialize the object.
+
+**Parameters:**
+
+* `source_path` (str or Path, optional) – Directory or CSV file to read from.
+* `csv_file` (str or Path, optional) – CSV file to write output to.
+
+**Notes:**
+
+* Paths can be relative or absolute.
+* Internal list `self.data` is initialized empty.
+
+---
+
+### `depacketize(self, data: bytes)`
+
+Parse a single packet into address and payload values.
+
+**Parameters:**
+
+* `data` (bytes) – A byte array representing one packet.
+
+**Returns:**
+
+* List: `[address, value1, value2, ...]`
+
+**Raises:**
+
+* `ValueError` if packet is too short or payload size doesn't match header.
+
+**Behavior:**
+
+* Appends the parsed packet to `self.data`.
+
+---
+
+### `readFromCSVs(self, source_path=None)`
+
+Read CSV files and depacketize the rows.
+
+**Parameters:**
+
+* `source_path` (str or Path, optional) – Overrides the saved `source_path` if provided.
+
+**Behavior:**
+
+* Reads all `.csv` files in the directory if a folder is provided.
+* Reads the single file if a file path is provided.
+* Converts CSV string hex values (e.g., `"0A"`) to bytes before depacketizing.
+* Appends each packet to `self.data`.
+
+**Raises:**
+
+* `ValueError` if no path is provided.
+* `FileNotFoundError` if the path does not exist.
+
+---
+
+### `writeToCSV(self, csv_file=None)`
+
+Write parsed data (`self.data`) to a CSV file.
+
+**Parameters:**
+
+* `csv_file` (str or Path, optional) – CSV file to write to, overrides saved file.
+
+**Behavior:**
+
+* Creates parent directories if they don’t exist.
+* Appends all rows in `self.data` to the CSV file.
+
+**Raises:**
+
+* `ValueError` if no CSV file is specified.
+
+---
+
+### `outputList(self)`
+
+Return all parsed packets as a list.
+
+**Returns:**
+
+* `List[List]` – Each inner list is `[address, value1, value2, ...]`.
+
+---
+
+### `getSource(self)`
+
+Return the currently set source path.
+
+**Returns:**
+
+* `Path` – Saved source path.
+
+---
+
+### `getCSV(self)`
+
+Return the currently set CSV file path.
+
+**Returns:**
+
+* `Path` – Saved CSV file path.
+
+---
+
+### `clearData(self)`
+
+Clear the internal data list.
+
+**Behavior:**
+
+* Empties `self.data` to start fresh.
+
+---
+
+## Example Usage
+
+```python
+# Initialize with a directory of CSVs and an output CSV
+dep = DataDepacketizer(source_path="C:/Baja/test_data", csv_file="C:/Baja/outputs/output.csv")
+
+# Read and depacketize CSV files
+dep.readFromCSVs()
+
+# Check parsed data
+print(dep.outputList())
+
+# Write parsed data to CSV
+dep.writeToCSV()
+
+# Clear data
+dep.clearData()
+print(dep.outputList())  # Should print []
+```
+
+---
+## Script usage (`if __name__ == "__main__":`)
+*Runs simple test cases for the class functions 
+
 
 ## File: `serial_listener.py`
 
