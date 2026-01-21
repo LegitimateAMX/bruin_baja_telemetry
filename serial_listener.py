@@ -14,7 +14,7 @@ class SerialListener:
         if directory and not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
     
-    def connect(self, port=None): #need to enter a default port
+    def connect(self, port='COM3'): #need to enter a default port
         self.port = port
         if (self.port):
             self.ser = serial.Serial(self.port, self.baudrate, timeout=self.timeout) #opens port and creates a serial connection
@@ -32,12 +32,15 @@ class SerialListener:
             print("Serial connection not created yet.")
             return
         while True:
-            ser_bytes = self.ser.readline() #readline() depends on newline character
+
+            ser_bytes = self.ser.readline()[0:-1]
+            #if len(ser_bytes) == 7:
             with open(self.path, 'a', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow([f"{b:02x}" for b in ser_bytes])
+                #writer.writerow([b for b in ser_bytes])
 
-listener = SerialListener(port="/dev/ttyUSB0") #change port as needed
+listener = SerialListener(port="COM3") #change port as needed
 listener.connect()
 try:
     listener.listen()
